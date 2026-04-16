@@ -3,16 +3,19 @@ const axios = require("axios");
 
 const app = express();
 
-// ENV থেকে key নাও (secure)
-const FLW_SECRET_KEY = process.env.FLW_SECRET_KEY;
+// Health check (IMPORTANT - Not Found fix)
+app.get("/", (req, res) => {
+  res.send("Server is running ✅");
+});
 
-app.get("/", async (req, res) => {
+// Payment route
+app.get("/pay", async (req, res) => {
   try {
     const { name, email, amount, description } = req.query;
 
-    // Basic validation
+    // Validation
     if (!name || !email || !amount) {
-      return res.status(400).send("Missing required parameters");
+      return res.status(400).send("Missing parameters");
     }
 
     const tx_ref = "order_" + Date.now();
@@ -20,10 +23,10 @@ app.get("/", async (req, res) => {
     const response = await axios.post(
       "https://api.flutterwave.com/v3/payments",
       {
-        tx_ref,
+        tx_ref: tx_ref,
         amount: Number(amount),
-        currency: "NGN", // চাইলে BDT বা NGN change করতে পারো
-        redirect_url: "https://your-site.com/success",
+        currency: "USD",
+        redirect_url: "https://example.com/success",
         customer: {
           email: email,
           name: name,
@@ -35,7 +38,7 @@ app.get("/", async (req, res) => {
       },
       {
         headers: {
-          Authorization: `Bearer ${FLW_SECRET_KEY}`,
+          Authorization: `Bearer ${process.env.FLW_SECRET_KEY}`,
           "Content-Type": "application/json",
         },
       }
@@ -43,15 +46,16 @@ app.get("/", async (req, res) => {
 
     const paymentLink = response.data.data.link;
 
-    // 🔥 Auto Redirect
+    // 🔥 Redirect to Flutterwave payment page
     return res.redirect(paymentLink);
 
   } catch (error) {
     console.error(error.response?.data || error.message);
-    return res.status(500).send("Payment initialization failed");
+    return res.status(500).send("Payment failed ❌");
   }
 });
 
+// MUST for Render
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
