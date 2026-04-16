@@ -3,7 +3,7 @@ const axios = require("axios");
 
 const app = express();
 
-// Health check (IMPORTANT - Not Found fix)
+// Health check
 app.get("/", (req, res) => {
   res.send("Server is running ✅");
 });
@@ -13,7 +13,6 @@ app.get("/pay", async (req, res) => {
   try {
     const { name, email, amount, description } = req.query;
 
-    // Validation
     if (!name || !email || !amount) {
       return res.status(400).send("Missing parameters");
     }
@@ -25,7 +24,7 @@ app.get("/pay", async (req, res) => {
       {
         tx_ref: tx_ref,
         amount: Number(amount),
-        currency: "NGR",
+        currency: "NGN", // ✅ FIXED
         redirect_url: "https://example.com/success",
         customer: {
           email: email,
@@ -44,9 +43,12 @@ app.get("/pay", async (req, res) => {
       }
     );
 
-    const paymentLink = response.data.data.link;
+    const paymentLink = response.data?.data?.link;
 
-    // 🔥 Redirect to Flutterwave payment page
+    if (!paymentLink) {
+      return res.status(500).send("No payment link received");
+    }
+
     return res.redirect(paymentLink);
 
   } catch (error) {
@@ -55,7 +57,7 @@ app.get("/pay", async (req, res) => {
   }
 });
 
-// MUST for Render
+// Server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
