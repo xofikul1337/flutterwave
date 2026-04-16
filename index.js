@@ -25,7 +25,7 @@ app.get("/pay", async (req, res) => {
       {
         tx_ref: tx_ref,
         amount: Number(amount),
-        currency: "USD",
+        currency: "NGR",
         redirect_url: "https://example.com/success",
         customer: {
           email: email,
