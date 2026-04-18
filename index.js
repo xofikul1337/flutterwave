@@ -219,46 +219,78 @@ app.get("/", (req, res) => {
   res.status(200).send("Server is running ✅");
 });
 
-// 1) User opens this link from AI/system
 app.get("/pay", async (req, res) => {
   try {
     const { order_id } = req.query;
 
+    // 1. order_id missing
     if (!order_id) {
-      return res.status(400).send("Missing order_id");
+      return res.status(400).send("Order ID is required ❌");
     }
 
+    // 2. format validation
+    if (!order_id.startsWith("ORD-")) {
+      return res.status(400).send("Invalid Order ID format ❌");
+    }
+
+    // 3. search in Airtable
     const orderResult = await getOrderByOrderId(order_id);
+
     if (!orderResult) {
-      return res.status(404).send("Order not found ❌");
+      return res.status(404).send("Incorrect Order ID / Order not found ❌");
     }
 
     const { recordId, fields } = orderResult;
 
-    if (fields.status === "paid") {
+    // 4. already paid
+    if (
+      fields.status === "paid" ||
+      fields.status === "Completed"
+    ) {
       return res.status(200).send("This order is already paid ✅");
     }
 
-    const requiredFields = ["order_id", "name", "email", "amount"];
+    // 5. required fields check
+    const requiredFields = [
+      "order_id",
+      "CustomerName",
+      "email",
+      "amount"
+    ];
+
     const missing = requiredFields.filter((f) => !fields[f]);
+
     if (missing.length) {
       return res
         .status(400)
-        .send(`Order is missing required fields: ${missing.join(", ")}`);
+        .send(`Order data incomplete: ${missing.join(", ")} ❌`);
     }
 
+    // 6. amount validation
+    if (Number(fields.amount) <= 0) {
+      return res.status(400).send("Invalid payment amount ❌");
+    }
+
+    // 7. create payment link
     const { paymentLink } = await createFlutterwavePaymentLink(fields);
 
     await updateOrderRecord(recordId, {
-      status: fields.status || "pending",
       payment_link_generated: "yes",
       latest_payment_link: paymentLink,
+      status: fields.status || "pending"
     });
 
     return res.redirect(paymentLink);
+
   } catch (error) {
-    console.error("PAY ROUTE ERROR:", error.response?.data || error.message);
-    return res.status(500).send("Payment initialization failed ❌");
+    console.error(
+      "PAY ROUTE ERROR:",
+      error.response?.data || error.message
+    );
+
+    return res
+      .status(500)
+      .send("Unable to initialize payment right now. Please try again later ❌");
   }
 });
 
