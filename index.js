@@ -85,7 +85,7 @@ async function createFlutterwavePaymentLink(order) {
     redirect_url: `${APP_BASE_URL}/success`,
     customer: {
       email: order.email,
-      name: order.name,
+      name: order.CustomerName,
     },
     customizations: {
       title: order.title || "Order Payment",
