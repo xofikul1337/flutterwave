@@ -3,74 +3,88 @@ const axios = require("axios");
 
 const app = express();
 
-// ENV
+// ---------- ENV ----------
 const PORT = process.env.PORT || 3000;
 const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
 const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
 const AIRTABLE_TABLE_NAME = process.env.AIRTABLE_TABLE_NAME || "Orders";
 
-// Airtable base
-const baseUrl = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(
-  AIRTABLE_TABLE_NAME
-)}`;
-
-const headers = {
-  Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-};
-
-// 🔎 get order by order_id
-async function getOrder(order_id) {
-  const formula = `{order_id}="${order_id}"`;
-  const url = `${baseUrl}?filterByFormula=${encodeURIComponent(
-    formula
-  )}&maxRecords=1`;
-
-  const res = await axios.get(url, { headers });
-  const records = res.data.records || [];
-  if (!records.length) return null;
-
-  return records[0].fields;
+// ---------- BASIC CHECK ----------
+if (!AIRTABLE_API_KEY || !AIRTABLE_BASE_ID) {
+  console.log("❌ Missing Airtable ENV");
 }
 
-// Home
+// ---------- HOME ----------
 app.get("/", (req, res) => {
   res.send("Server running ✅");
 });
 
-// 🧪 DISPLAY ROUTE (no payment yet)
+// ---------- PAYMENT DISPLAY ROUTE ----------
 app.get("/pay", async (req, res) => {
   try {
     const { order_id } = req.query;
 
-    // ❌ missing
     if (!order_id) {
       return res.status(400).send("<h2>Invalid payment link ❌</h2>");
     }
 
-    const order = await getOrder(order_id);
+    // 🔥 Airtable query
+    const formula = `{order_id}="${order_id}"`;
+
+    const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(
+      AIRTABLE_TABLE_NAME
+    )}?filterByFormula=${encodeURIComponent(formula)}&maxRecords=1`;
+
+    console.log("🔍 Airtable URL:", url);
+
+    const response = await axios.get(url, {
+      headers: {
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+      },
+    });
+
+    const records = response.data.records;
 
     // ❌ not found
-    if (!order) {
+    if (!records || records.length === 0) {
       return res.status(404).send("<h2>Invalid payment link ❌</h2>");
     }
 
+    const order = records[0].fields;
+
+    console.log("✅ Order found:", order);
+
     const { name, email, phone, address, amount, description } = order;
 
-    // ❌ incomplete
     if (!name || !email || !amount) {
       return res.status(400).send("<h2>Order data incomplete ❌</h2>");
     }
 
-    // ✅ show simple page
+    // ✅ Display HTML
     return res.send(`
       <html>
         <head>
           <title>Order Preview</title>
           <style>
-            body { font-family: Arial; padding: 30px; background:#f6f6f6;}
-            .card { background:#fff; padding:20px; border-radius:10px; max-width:500px; margin:auto; box-shadow:0 2px 8px rgba(0,0,0,0.1);}
-            h2 { margin-top:0; }
-            p { margin:8px 0; }
+            body {
+              font-family: Arial;
+              background: #f5f5f5;
+              padding: 40px;
+            }
+            .card {
+              background: white;
+              padding: 25px;
+              border-radius: 10px;
+              max-width: 500px;
+              margin: auto;
+              box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            }
+            h2 {
+              margin-top: 0;
+            }
+            p {
+              margin: 8px 0;
+            }
           </style>
         </head>
         <body>
@@ -89,12 +103,16 @@ app.get("/pay", async (req, res) => {
     `);
 
   } catch (err) {
-    console.error(err.response?.data || err.message);
-    return res.status(500).send("<h2>Something went wrong ❌</h2>");
+    console.error("🔥 ERROR:", err.response?.data || err.message);
+
+    return res.status(500).send(`
+      <h2>Something went wrong ❌</h2>
+      <pre>${JSON.stringify(err.response?.data || err.message, null, 2)}</pre>
+    `);
   }
 });
 
-// start
+// ---------- START ----------
 app.listen(PORT, () => {
-  console.log("Server running on port " + PORT);
+  console.log(`Server running on port ${PORT}`);
 });
