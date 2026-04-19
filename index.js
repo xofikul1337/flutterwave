@@ -5,21 +5,16 @@ const app = express();
 
 // ---------- ENV ----------
 const PORT = process.env.PORT || 3000;
-const AIRTABLE_API_KEY = "patkhukQm6ppbWBEZ.ed93e796e6f486c1b7d458659ba28fd63b79f76b90e6590c592a1181b5c14e47";
-const AIRTABLE_BASE_ID = "appPbCABKZkBHWwl2" ;
+const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
+const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
 const AIRTABLE_TABLE_NAME = process.env.AIRTABLE_TABLE_NAME || "Orders";
-
-// ---------- BASIC CHECK ----------
-if (!AIRTABLE_API_KEY || !AIRTABLE_BASE_ID) {
-  console.log("❌ Missing Airtable ENV");
-}
 
 // ---------- HOME ----------
 app.get("/", (req, res) => {
   res.send("Server running ✅");
 });
 
-// ---------- PAYMENT DISPLAY ROUTE ----------
+// ---------- PAYMENT DISPLAY ----------
 app.get("/pay", async (req, res) => {
   try {
     const { order_id } = req.query;
@@ -28,14 +23,11 @@ app.get("/pay", async (req, res) => {
       return res.status(400).send("<h2>Invalid payment link ❌</h2>");
     }
 
-    // 🔥 Airtable query
     const formula = `{order_id}="${order_id}"`;
 
     const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(
       AIRTABLE_TABLE_NAME
     )}?filterByFormula=${encodeURIComponent(formula)}&maxRecords=1`;
-
-    console.log("🔍 Airtable URL:", url);
 
     const response = await axios.get(url, {
       headers: {
@@ -45,22 +37,28 @@ app.get("/pay", async (req, res) => {
 
     const records = response.data.records;
 
-    // ❌ not found
     if (!records || records.length === 0) {
       return res.status(404).send("<h2>Invalid payment link ❌</h2>");
     }
 
     const order = records[0].fields;
 
-    console.log("✅ Order found:", order);
+    // 🔥 FIX: CustomerName use
+    const name = order.CustomerName;
+    const email = order.email;
+    const phone = order.phone;
+    const address = order.address;
+    const amount = order.amount;
+    const description = order.description;
+    const product = order.ProductName;
+    const quantity = order.Qaunitity;
 
-    const { name, email, phone, address, amount, description } = order;
-
+    // validation
     if (!name || !email || !amount) {
       return res.status(400).send("<h2>Order data incomplete ❌</h2>");
     }
 
-    // ✅ Display HTML
+    // ✅ UI
     return res.send(`
       <html>
         <head>
@@ -90,20 +88,30 @@ app.get("/pay", async (req, res) => {
         <body>
           <div class="card">
             <h2>Order Details</h2>
+
             <p><b>Order ID:</b> ${order_id}</p>
-            <p><b>Name:</b> ${name}</p>
+            <p><b>Customer Name:</b> ${name}</p>
             <p><b>Email:</b> ${email}</p>
             <p><b>Phone:</b> ${phone || "-"}</p>
             <p><b>Address:</b> ${address || "-"}</p>
+
+            <hr>
+
+            <p><b>Product:</b> ${product || "-"}</p>
+            <p><b>Quantity:</b> ${quantity || "-"}</p>
             <p><b>Description:</b> ${description || "-"}</p>
-            <p><b>Amount:</b> ₦${amount}</p>
+
+            <hr>
+
+            <p><b>Total Amount:</b> ₦${amount}</p>
+
           </div>
         </body>
       </html>
     `);
 
   } catch (err) {
-    console.error("🔥 ERROR:", err.response?.data || err.message);
+    console.error(err.response?.data || err.message);
 
     return res.status(500).send(`
       <h2>Something went wrong ❌</h2>
@@ -114,5 +122,5 @@ app.get("/pay", async (req, res) => {
 
 // ---------- START ----------
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log("Server running on port " + PORT);
 });
