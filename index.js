@@ -5,16 +5,21 @@ const app = express();
 
 // ---------- ENV ----------
 const PORT = process.env.PORT || 3000;
+
 const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
 const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
 const AIRTABLE_TABLE_NAME = process.env.AIRTABLE_TABLE_NAME || "Orders";
+
+const FLW_SECRET_KEY = process.env.FLW_SECRET_KEY;
+const APP_BASE_URL = process.env.APP_BASE_URL || "https://flutterwave-sbhw.onrender.com";
+const DEFAULT_CURRENCY = process.env.DEFAULT_CURRENCY || "NGN";
 
 // ---------- HOME ----------
 app.get("/", (req, res) => {
   res.send("Server running ✅");
 });
 
-// ---------- PAYMENT DISPLAY ----------
+// ---------- /pay ----------
 app.get("/pay", async (req, res) => {
   try {
     const { order_id } = req.query;
@@ -23,8 +28,8 @@ app.get("/pay", async (req, res) => {
       return res.status(400).send("<h2>Invalid payment link ❌</h2>");
     }
 
+    // 🔍 Airtable query
     const formula = `{order_id}="${order_id}"`;
-
     const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(
       AIRTABLE_TABLE_NAME
     )}?filterByFormula=${encodeURIComponent(formula)}&maxRecords=1`;
@@ -37,81 +42,60 @@ app.get("/pay", async (req, res) => {
 
     const records = response.data.records;
 
+    // ❌ not found
     if (!records || records.length === 0) {
       return res.status(404).send("<h2>Invalid payment link ❌</h2>");
     }
 
     const order = records[0].fields;
 
-    // 🔥 FIX: CustomerName use
+    // 🔥 Field mapping (DB অনুযায়ী)
     const name = order.CustomerName;
     const email = order.email;
-    const phone = order.phone;
-    const address = order.address;
     const amount = order.amount;
-    const description = order.description;
-    const product = order.ProductName;
-    const quantity = order.Qaunitity;
+    const description = order.description || "Order Payment";
 
-    // validation
+    // ❌ validation
     if (!name || !email || !amount) {
       return res.status(400).send("<h2>Order data incomplete ❌</h2>");
     }
 
-    // ✅ UI
-    return res.send(`
-      <html>
-        <head>
-          <title>Order Preview</title>
-          <style>
-            body {
-              font-family: Arial;
-              background: #f5f5f5;
-              padding: 40px;
-            }
-            .card {
-              background: white;
-              padding: 25px;
-              border-radius: 10px;
-              max-width: 500px;
-              margin: auto;
-              box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            }
-            h2 {
-              margin-top: 0;
-            }
-            p {
-              margin: 8px 0;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="card">
-            <h2>Order Details</h2>
+    // 🔥 Flutterwave create payment
+    const flwRes = await axios.post(
+      "https://api.flutterwave.com/v3/payments",
+      {
+        tx_ref: order_id,
+        amount: Number(amount),
+        currency: DEFAULT_CURRENCY,
+        redirect_url: `${APP_BASE_URL}/success`,
+        customer: {
+          email: email,
+          name: name,
+        },
+        customizations: {
+          title: "Order Payment",
+          description: description,
+        },
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${FLW_SECRET_KEY}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
 
-            <p><b>Order ID:</b> ${order_id}</p>
-            <p><b>Customer Name:</b> ${name}</p>
-            <p><b>Email:</b> ${email}</p>
-            <p><b>Phone:</b> ${phone || "-"}</p>
-            <p><b>Address:</b> ${address || "-"}</p>
+    const paymentLink = flwRes.data?.data?.link;
 
-            <hr>
+    if (!paymentLink) {
+      return res.status(500).send("<h2>Payment link error ❌</h2>");
+    }
 
-            <p><b>Product:</b> ${product || "-"}</p>
-            <p><b>Quantity:</b> ${quantity || "-"}</p>
-            <p><b>Description:</b> ${description || "-"}</p>
-
-            <hr>
-
-            <p><b>Total Amount:</b> ₦${amount}</p>
-
-          </div>
-        </body>
-      </html>
-    `);
+    // 🔁 Redirect to Flutterwave hosted page
+    return res.redirect(paymentLink);
 
   } catch (err) {
-    console.error(err.response?.data || err.message);
+    console.error("ERROR:", err.response?.data || err.message);
 
     return res.status(500).send(`
       <h2>Something went wrong ❌</h2>
