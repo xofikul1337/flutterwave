@@ -5,8 +5,8 @@ const app = express();
 
 // ---------- ENV ----------
 const PORT = process.env.PORT || 3000;
-const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
-const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
+const AIRTABLE_API_KEY = "patkhukQm6ppbWBEZ.ed93e796e6f486c1b7d458659ba28fd63b79f76b90e6590c592a1181b5c14e47";
+const AIRTABLE_BASE_ID = "appPbCABKZkBHWwl2" ;
 const AIRTABLE_TABLE_NAME = process.env.AIRTABLE_TABLE_NAME || "Orders";
 
 // ---------- BASIC CHECK ----------
