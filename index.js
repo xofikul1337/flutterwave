@@ -3,18 +3,13 @@ const axios = require("axios");
 
 const app = express();
 
-// ---------- ENV ----------
+// ENV
 const PORT = process.env.PORT || 3000;
-
-const FLW_SECRET_KEY = process.env.FLW_SECRET_KEY;
-
 const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
 const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
 const AIRTABLE_TABLE_NAME = process.env.AIRTABLE_TABLE_NAME || "Orders";
 
-const DEFAULT_CURRENCY = process.env.DEFAULT_CURRENCY || "NGN";
-
-// ---------- Airtable ----------
+// Airtable base
 const baseUrl = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(
   AIRTABLE_TABLE_NAME
 )}`;
@@ -23,94 +18,83 @@ const headers = {
   Authorization: `Bearer ${AIRTABLE_API_KEY}`,
 };
 
-// 🔍 Get order by order_id
+// 🔎 get order by order_id
 async function getOrder(order_id) {
   const formula = `{order_id}="${order_id}"`;
-
-  const url = `${baseUrl}?filterByFormula=${encodeURIComponent(formula)}&maxRecords=1`;
+  const url = `${baseUrl}?filterByFormula=${encodeURIComponent(
+    formula
+  )}&maxRecords=1`;
 
   const res = await axios.get(url, { headers });
-
-  const records = res.data.records;
-
-  if (!records || records.length === 0) return null;
+  const records = res.data.records || [];
+  if (!records.length) return null;
 
   return records[0].fields;
 }
 
-// ---------- ROUTES ----------
-
-// Health check
+// Home
 app.get("/", (req, res) => {
   res.send("Server running ✅");
 });
 
-// 🔥 PAYMENT ROUTE
+// 🧪 DISPLAY ROUTE (no payment yet)
 app.get("/pay", async (req, res) => {
   try {
     const { order_id } = req.query;
 
-    // ❌ Missing param
+    // ❌ missing
     if (!order_id) {
-      return res.status(400).send("Invalid payment link ❌");
+      return res.status(400).send("<h2>Invalid payment link ❌</h2>");
     }
 
-    // 🔍 Fetch from Airtable
     const order = await getOrder(order_id);
 
-    // ❌ Not found
+    // ❌ not found
     if (!order) {
-      return res.status(404).send("Invalid payment link ❌");
+      return res.status(404).send("<h2>Invalid payment link ❌</h2>");
     }
 
-    const { name, email, amount, description } = order;
+    const { name, email, phone, address, amount, description } = order;
 
-    // ❌ Required fields check
+    // ❌ incomplete
     if (!name || !email || !amount) {
-      return res.status(400).send("Order data incomplete ❌");
+      return res.status(400).send("<h2>Order data incomplete ❌</h2>");
     }
 
-    // 🔥 Create Flutterwave payment
-    const response = await axios.post(
-      "https://api.flutterwave.com/v3/payments",
-      {
-        tx_ref: order_id,
-        amount: Number(amount),
-        currency: DEFAULT_CURRENCY,
-        redirect_url: "https://yourdomain.com/success",
-        customer: {
-          email: email,
-          name: name,
-        },
-        customizations: {
-          title: "Order Payment",
-          description: description || "Order Payment",
-        },
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${FLW_SECRET_KEY}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-
-    const paymentLink = response.data?.data?.link;
-
-    if (!paymentLink) {
-      return res.status(500).send("Payment link error ❌");
-    }
-
-    // 🔥 Redirect to Flutterwave page
-    return res.redirect(paymentLink);
+    // ✅ show simple page
+    return res.send(`
+      <html>
+        <head>
+          <title>Order Preview</title>
+          <style>
+            body { font-family: Arial; padding: 30px; background:#f6f6f6;}
+            .card { background:#fff; padding:20px; border-radius:10px; max-width:500px; margin:auto; box-shadow:0 2px 8px rgba(0,0,0,0.1);}
+            h2 { margin-top:0; }
+            p { margin:8px 0; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <h2>Order Details</h2>
+            <p><b>Order ID:</b> ${order_id}</p>
+            <p><b>Name:</b> ${name}</p>
+            <p><b>Email:</b> ${email}</p>
+            <p><b>Phone:</b> ${phone || "-"}</p>
+            <p><b>Address:</b> ${address || "-"}</p>
+            <p><b>Description:</b> ${description || "-"}</p>
+            <p><b>Amount:</b> ₦${amount}</p>
+          </div>
+        </body>
+      </html>
+    `);
 
   } catch (err) {
     console.error(err.response?.data || err.message);
-    return res.status(500).send("Something went wrong ❌");
+    return res.status(500).send("<h2>Something went wrong ❌</h2>");
   }
 });
 
-// ---------- START ----------
+// start
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log("Server running on port " + PORT);
 });
